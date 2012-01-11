@@ -1,9 +1,9 @@
-define(['binaryajax','jdataview', 'deflateOld'], function () {
+define(['jdataview', 'deflateOld'], function (jDataView, Inflator) {
   "use strict";
 
   var __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
-   var PNG = function (binary_string) {
+  var PNGStringParser = function () {
     this.paeth_predictor = __bind(this.paeth_predictor, this);
     this.filter_paeth = __bind(this.filter_paeth, this);
     this.filter_average = __bind(this.filter_average, this);
@@ -11,59 +11,85 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
     this.filter_sub = __bind(this.filter_sub, this);
     this.filter_none = __bind(this.filter_none, this);
     this.read_line = __bind(this.read_line, this);
-    var chunk;
-    this.view = new jDataView(binary_string);
-    this.idat_chunks = [];
-    this.eof = false;
-    this.number_of_ihdr = 0;
-    this.number_of_idat = 0;
-    this.check_signature();
-    this.filters = [this.filter_none, this.filter_sub, this.filter_up, this.filter_average, this.filter_paeth];
-    while (!this.eof) {
-      chunk = this.read_chunk();
-      switch (chunk.type) {
-        case 'IHDR':
-          this.read_ihdr(chunk.data);
-          break;
-        case 'wHAT':
-          this.read_what(chunk.data);
-          break;
-        case 'IDAT':
-          this.read_idat(chunk.data);
-          break;
-        case 'IEND':
-          console.log('end of file, baby!');
-      }
-    }
-    this.chunk_reader = new Inflator({
-      chunk: 0,
-      index: 2,
-      data: this.idat_chunks,
-      num_chunks: this.number_of_idat,
-      readByte: function() {
-        if (this.chunk >= this.data.length) return -1;
-        while (this.index >= this.data[this.chunk].length) {
-          this.index = 0;
-          this.chunk += 1;
-          if (this.chunk >= this.num_chunks) return -1;
+
+    this.parse = function (binary_string) {
+      var headerDataUnit = {};
+      headerDataUnit.header = {};
+      headerDataUnit.data = [];
+      var chunk;
+      this.view = new jDataView(binary_string);
+      this.idat_chunks = [];
+      this.eof = false;
+      this.number_of_ihdr = 0;
+      this.number_of_idat = 0;
+      this.check_signature();
+      this.headerDataUnits = [];
+      this.filters = [this.filter_none, this.filter_sub, this.filter_up, this.filter_average, this.filter_paeth];
+      while (!this.eof) {
+        chunk = this.read_chunk();
+        switch (chunk.type) {
+          case 'IHDR':
+            this.read_ihdr(chunk.data);
+            break;
+          case 'wHAT':
+            this.read_what(chunk.data);
+            break;
+          case 'IDAT':
+            this.read_idat(chunk.data);
+            break;
+          case 'IEND':
+            console.log('end of file, baby!');
         }
-        this.index += 1;
-        return this.data[this.chunk][this.index - 1];
       }
-    });
+      this.chunk_reader = new Inflator({
+        chunk: 0,
+        index: 2,
+        data: this.idat_chunks,
+        num_chunks: this.number_of_idat,
+        readByte: function() {
+          if (this.chunk >= this.data.length) return -1;
+          while (this.index >= this.data[this.chunk].length) {
+            this.index = 0;
+            this.chunk += 1;
+            if (this.chunk >= this.num_chunks) return -1;
+          }
+          this.index += 1;
+          return this.data[this.chunk][this.index - 1];
+        }
+      });
+
+      headerDataUnit.header.NAXIS1 = this.width;
+      headerDataUnit.header.NAXIS2 = this.height;
+      headerDataUnit.header.MINPIXEL = this.min_pixel;
+      headerDataUnit.header.MAXPIXEL = this.max_pixel;
+
+      for (var i = 0; i < pngImage.height; ++i) {
+        headerDataUnit.data = headerDataUnit.data.concat(pngImage.read_line());
+      }
+
+      this.headerDataUnits.push(headerDataUnit);
+      this.onParsed(this.headerDataUnits);
+
+    };
+
+    this.onParsed = function (headerDataUnits) {};
+    this.onError = function (error) {
+      console.error(error);
+    };
+
   };
 
   // Convert bytes to an integer
-  PNG.to_integer = function(bytes, index) {
+  PNGStringParser.to_integer = function(bytes, index) {
     return (bytes[index] << 24) | (bytes[index + 1] << 16) | (bytes[index + 2] << 8) | bytes[index + 3];
   };
 
   //Verify the PNG signature
-  PNG.png_signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  PNGStringParser.png_signature = [137, 80, 78, 71, 13, 10, 26, 10];
 
-  PNG.prototype.check_signature = function() {
+  PNGStringParser.prototype.check_signature = function() {
     var byte, _i, _len, _ref, _results;
-    _ref = PNG.png_signature;
+    _ref = PNGStringParser.png_signature;
     _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       byte = _ref[_i];
@@ -72,12 +98,12 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
     return _results;
   };
 
-  PNG.prototype.verify_byte = function(byte) {
+  PNGStringParser.prototype.verify_byte = function(byte) {
     if (byte !== this.view.getUint8()) throw "PNG signature is not correct";
   };
 
   // Read a PNG chunk, determines the length and type, and extracts the data
-  PNG.prototype.read_chunk = function() {
+  PNGStringParser.prototype.read_chunk = function() {
     var data, i, length, type;
     length = this.view.getUint32();
     type = this.view.getString(4);
@@ -116,12 +142,12 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
      * filter method
      * interlace method
   */
-  PNG.prototype.read_ihdr = function(data) {
+  PNGStringParser.prototype.read_ihdr = function(data) {
     var allowed_bit_depths, allowed_color_types, index;
     this.number_of_ihdr += 1;
     if (this.number_of_ihdr > 1) throw "PNG contains too many IHDR chunks";
-    this.width = PNG.to_integer(data, 0);
-    this.height = PNG.to_integer(data, 4);
+    this.width = PNGStringParser.to_integer(data, 0);
+    this.height = PNGStringParser.to_integer(data, 4);
     allowed_color_types = [0];
     if (allowed_color_types.indexOf(data[9]) < 0) {
       throw "PNG contains an unallowed color type (only supporting grayscale)";
@@ -160,7 +186,7 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
      * Minimum pixel value
      * Maximum pixel value
   */
-  PNG.prototype.read_what = function(data) {
+  PNGStringParser.prototype.read_what = function(data) {
     if (this.bit_depth === 8) {
       this.min_pixel = data[0];
       this.max_pixel = data[1];
@@ -174,7 +200,7 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
   /*
     Reads the IDAT (image data) into the class scope for later processing.
   */
-  PNG.prototype.read_idat = function(data) {
+  PNGStringParser.prototype.read_idat = function(data) {
     this.idat_chunks[this.number_of_idat] = data;
     return this.number_of_idat += 1;
   };
@@ -182,7 +208,7 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
   /*
     Scans a line for image data.
   */
-  PNG.prototype.read_line = function() {
+  PNGStringParser.prototype.read_line = function() {
     var a, a_param, b, c, data, element, filter_code, index, recon_data, _len, _ref;
     a_param = (function() {
       var _ref, _results;
@@ -225,29 +251,29 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
   /*
     Various filter functions, defined by the PNG specifications.
   */
-  PNG.prototype.filter_none = function(x, a, b, c) {
+  PNGStringParser.prototype.filter_none = function(x, a, b, c) {
     return x;
   };
 
-  PNG.prototype.filter_sub = function(x, a, b, c) {
+  PNGStringParser.prototype.filter_sub = function(x, a, b, c) {
     return (x + a) & 0xff;
   };
 
-  PNG.prototype.filter_up = function(x, a, b, c) {
+  PNGStringParser.prototype.filter_up = function(x, a, b, c) {
     return (x + b) & 0xff;
   };
 
-  PNG.prototype.filter_average = function(x, a, b, c) {
+  PNGStringParser.prototype.filter_average = function(x, a, b, c) {
     return (x + ((a + b) >> 1)) & 0xff;
   };
 
-  PNG.prototype.filter_paeth = function(x, a, b, c) {
+  PNGStringParser.prototype.filter_paeth = function(x, a, b, c) {
     var pr;
     pr = this.paeth_predictor(a, b, c);
     return (x + pr) & 0xff;
   };
 
-  PNG.prototype.paeth_predictor = function(a, b, c) {
+  PNGStringParser.prototype.paeth_predictor = function(a, b, c) {
     var p, pa, pb, pc, pr;
     p = a + b - c;
     pa = Math.abs(p - a);
@@ -263,6 +289,8 @@ define(['binaryajax','jdataview', 'deflateOld'], function () {
     return pr;
   };
 
-  return PNG;
+  return {
+    'PngParser' : PNGStringParser
+  };
 
 });

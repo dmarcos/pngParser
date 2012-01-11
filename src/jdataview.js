@@ -6,7 +6,7 @@
 // http://blog.vjeux.com/ <vjeuxx@gmail.com>
 // 
 
-(function () {
+define(function () {
 
   var compatibility = {
     ArrayBuffer: typeof ArrayBuffer !== 'undefined',
@@ -318,4 +318,6 @@
 
   self.jDataView = jDataView;
 
-})();
+  return jDataView;
+
+});
