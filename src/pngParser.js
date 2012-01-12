@@ -63,8 +63,8 @@ define(['./jdataview', './deflateOld'], function (jDataView, Inflator) {
       headerDataUnit.header.MINPIXEL = this.min_pixel;
       headerDataUnit.header.MAXPIXEL = this.max_pixel;
 
-      for (var i = 0; i < pngImage.height; ++i) {
-        headerDataUnit.data = headerDataUnit.data.concat(pngImage.read_line());
+      for (var i = 0; i < this.height; ++i) {
+        headerDataUnit.data = headerDataUnit.data.concat(this.read_line());
       }
 
       this.headerDataUnits.push(headerDataUnit);
