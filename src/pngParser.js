@@ -60,11 +60,12 @@ define(['./jdataview', './deflateOld'], function (jDataView, Inflator) {
 
       headerDataUnit.header.NAXIS1 = this.width;
       headerDataUnit.header.NAXIS2 = this.height;
+      headerDataUnit.header.BITPIX = 16;
       headerDataUnit.header.MINPIXEL = this.min_pixel;
       headerDataUnit.header.MAXPIXEL = this.max_pixel;
 
       for (var i = 0; i < this.height; ++i) {
-        headerDataUnit.data = headerDataUnit.data.concat(this.read_line());
+        headerDataUnit.data = this.data; //headerDataUnit.data.concat(this.read_line());
       }
 
       this.headerDataUnits.push(headerDataUnit);
