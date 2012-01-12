@@ -289,8 +289,6 @@ define(['./jdataview', './deflateOld'], function (jDataView, Inflator) {
     return pr;
   };
 
-  return {
-    'PngParser' : PNGStringParser
-  };
+  return PNGStringParser;
 
 });
